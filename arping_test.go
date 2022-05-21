@@ -52,6 +52,24 @@ func TestGratuitousArpWithV6IP(t *testing.T) {
 	validateInvalidV4AddrErr(t, err)
 }
 
+/*
+	func TestRedundantIPCheckWithGratuitousArpOverIface(t *testing.T) {
+		EnableVerboseLog()
+
+		srcIP := net.ParseIP("10.10.10.133")
+		ifaceName := "ens34"
+		iface, err := net.InterfaceByName(ifaceName)
+		if err != nil {
+			t.Error(err)
+		}
+		redundantIPExists, err := RedundantIPCheckWithGratuitousArpOverIface(srcIP, *iface)
+		if err != nil {
+			t.Error(err)
+		}
+		t.Logf("redundant ip exists: %t", redundantIPExists)
+	}
+*/
+
 func TestGoroutinesDoesNotLeak(t *testing.T) {
 	ip := net.ParseIP("127.0.0.1")
 	SetTimeout(time.Duration(10 * time.Millisecond))
