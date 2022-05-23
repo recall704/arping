@@ -68,8 +68,17 @@ func (datagram arpDatagram) MarshalWithEthernetHeader() []byte {
 func (datagram arpDatagram) SenderIP() net.IP {
 	return net.IP(datagram.spa)
 }
+
 func (datagram arpDatagram) SenderMac() net.HardwareAddr {
 	return net.HardwareAddr(datagram.sha)
+}
+
+func (datagram arpDatagram) TargetIP() net.IP {
+	return net.IP(datagram.tpa)
+}
+
+func (datagram arpDatagram) TargetMac() net.HardwareAddr {
+	return net.HardwareAddr(datagram.tha)
 }
 
 func (datagram arpDatagram) IsResponseOf(request arpDatagram) bool {

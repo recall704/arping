@@ -214,6 +214,79 @@ func GratuitousArpOverIface(srcIP net.IP, iface net.Interface) error {
 	return err
 }
 
+// RedundantIPCheckWithGratuitousArpOverIface ...
+// Response:
+//    bool: true if the ip already in used
+//    error: nil if no error
+func RedundantIPCheckWithGratuitousArpOverIface(srcIP net.IP, iface net.Interface) (bool, error) {
+	if err := validateIP(srcIP); err != nil {
+		return false, err
+	}
+	srcMac := iface.HardwareAddr
+	broadcastMac := []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
+	request := newArpRequest(srcMac, srcIP, broadcastMac, srcIP)
+
+	sock, err := initialize(iface)
+	if err != nil {
+		return false, err
+	}
+	defer sock.deinitialize()
+
+	type GratuitousArpResult struct {
+		senderIP  net.IP
+		senderMac net.HardwareAddr
+		targetIP  net.IP
+		targetMac net.HardwareAddr
+		duration  time.Duration
+		err       error
+	}
+	GratuitousArpResultChan := make(chan GratuitousArpResult, 1)
+
+	go func() {
+		// send gratuitous arp request
+		verboseLog.Printf("gratuitous arp over interface: '%s' with srcIP: '%s', srcMac: '%s'\n", iface.Name, srcIP, srcMac)
+		if sendTime, err := sock.send(request); err != nil {
+			GratuitousArpResultChan <- GratuitousArpResult{nil, nil, nil, nil, 0, err}
+		} else {
+			for {
+				// receive arp response
+				response, receiveTime, err := sock.receive()
+				if err != nil {
+					GratuitousArpResultChan <- GratuitousArpResult{nil, nil, nil, nil, 0, err}
+					return
+				}
+
+				verboseLog.Printf("received arp response: srcIP: '%s', srcMac: '%s', dstIP: '%s', dstMac: '%s'\n",
+					response.SenderIP(),
+					response.SenderMac(),
+					response.TargetIP(),
+					response.TargetMac(),
+				)
+
+				duration := receiveTime.Sub(sendTime)
+				if srcIP.Equal(response.SenderIP()) {
+					GratuitousArpResultChan <- GratuitousArpResult{response.SenderIP(), response.SenderMac(), response.TargetIP(), response.TargetMac(), duration, err}
+					return
+				}
+			}
+
+		}
+	}()
+
+	select {
+	case pingResult := <-GratuitousArpResultChan:
+		if pingResult.err != nil {
+			return false, pingResult.err
+		} else {
+			return srcIP.Equal(pingResult.senderIP) && srcMac.String() != pingResult.senderMac.String(), nil
+		}
+	case <-time.After(timeout):
+		// ignore timeout
+		verboseLog.Printf("ignore redundant ip check after %d ms", timeout.Microseconds())
+		return false, nil
+	}
+}
+
 // EnableVerboseLog enables verbose logging on stdout
 func EnableVerboseLog() {
 	verboseLog = log.New(os.Stdout, "", 0)
